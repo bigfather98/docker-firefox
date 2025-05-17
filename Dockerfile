@@ -24,10 +24,11 @@ RUN \
         xdotool \
         python3 \
         py3-pip \
-        python3-tk \      # This is the critical line
+        tcl-dev \
+        tk-dev \
+        python3-dev \
         scrot \
         build-base \
-        python3-dev \
         && \
     python3 -m pip install --upgrade pip && \
     pip3 install --no-cache-dir --break-system-packages Flask pyautogui && \
