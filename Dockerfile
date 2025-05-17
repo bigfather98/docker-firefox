@@ -44,18 +44,20 @@ COPY --from=membarrier /tmp/membarrier_check /usr/bin/
 
 EXPOSE 5001
 
-RUN mkdir -p /etc/s6-overlay/s6-rc.d/mouse-controller/dependencies.d && \
-    true
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/mouse-controller/run
-#!/usr/bin/with-contenv bash
-source /etc/s6/services/init/load-env.sh
-echo "Mouse Controller Service: Starting Mouse Controller API..."
-exec s6-setuidgid "\${USER_ID}:\${GROUP_ID}" python3 /opt/mouse-controller/mouse_controller.py
-EOF
-
-RUN chmod +x /etc/s6-overlay/s6-rc.d/mouse-controller/run
-RUN echo "longrun" > /etc/s6-overlay/s6-rc.d/mouse-controller/type
+# s6-overlay service definition for the mouse controller API
+RUN \
+    mkdir -p /etc/s6-overlay/s6-rc.d/mouse-controller && \
+    echo '#!/usr/bin/with-contenv bash' > /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'source /etc/s6/services/init/load-env.sh' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'echo "Mouse Controller Service: Attempting to start Mouse Controller API..."' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'ls -la /opt/mouse-controller/' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'python3 --version' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'pip3 --version' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'echo "Mouse Controller Service: Executing python script..."' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'exec s6-setuidgid "${USER_ID}:${GROUP_ID}" python3 /opt/mouse-controller/mouse_controller.py' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    chmod +x /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo "longrun" > /etc/s6-overlay/s6-rc.d/mouse-controller/type && \
+    mkdir -p /etc/s6-overlay/s6-rc.d/mouse-controller/dependencies.d
 
 RUN \
     set-cont-env APP_NAME "Firefox" && \
