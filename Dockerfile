@@ -8,7 +8,7 @@ RUN strip membarrier_check
 FROM jlesage/baseimage-gui:alpine-3.21-v4.7.1
 
 ARG DOCKER_IMAGE_VERSION=
-ARG FIREFOX_VERSION=136.0.4-r0
+ARG FIREFOX_VERSION=136.0.4-r0 # Or your preferred Firefox version
 
 WORKDIR /tmp
 
@@ -24,7 +24,7 @@ RUN \
         xdotool \
         python3 \
         py3-pip \
-        py3-tkinter \
+        python3-tk \      # This is the critical line
         scrot \
         build-base \
         python3-dev \
