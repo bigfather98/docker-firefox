@@ -39,7 +39,7 @@ RUN \
     APP_ICON_URL=https://github.com/jlesage/docker-templates/raw/master/jlesage/images/firefox-icon.png && \
     install_app_icon.sh "$APP_ICON_URL"
 
-COPY rootfs/ /
+COPY rootfs/ / # This should copy your mouse_controller.py into /opt/mouse-controller/ if structured correctly
 COPY --from=membarrier /tmp/membarrier_check /usr/bin/
 
 EXPOSE 5001
@@ -50,10 +50,15 @@ RUN \
     echo '#!/usr/bin/with-contenv bash' > /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
     echo 'source /etc/s6/services/init/load-env.sh' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
     echo 'echo "Mouse Controller Service: Attempting to start Mouse Controller API..."' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'echo "Mouse Controller Service: Listing /opt/mouse-controller/ contents:"' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
     echo 'ls -la /opt/mouse-controller/' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'echo "Mouse Controller Service: Python3 version:"' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
     echo 'python3 --version' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'echo "Mouse Controller Service: Pip3 version:"' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
     echo 'pip3 --version' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
-    echo 'echo "Mouse Controller Service: Executing python script..."' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'echo "Mouse Controller Service: Checking for pyautogui import:"' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'python3 -c "import pyautogui; print(pyautogui.__version__)"' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run || echo "Mouse Controller Service: PyAutoGUI import check failed (this command might error if pyautogui has issues)"' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'echo "Mouse Controller Service: Executing python script /opt/mouse-controller/mouse_controller.py ..."' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
     echo 'exec s6-setuidgid "${USER_ID}:${GROUP_ID}" python3 /opt/mouse-controller/mouse_controller.py' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
     chmod +x /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
     echo "longrun" > /etc/s6-overlay/s6-rc.d/mouse-controller/type && \
