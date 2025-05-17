@@ -30,7 +30,7 @@ RUN \
         scrot \
         build-base \
         && \
-    python3 -m pip install --upgrade pip && \
+    python3 -m pip install --upgrade pip --break-system-packages && \
     pip3 install --no-cache-dir --break-system-packages Flask pyautogui && \
     find /usr/share/icons/Adwaita -type d -mindepth 1 -maxdepth 1 -not -name 16x16 -not -name scalable -exec rm -rf {} ';' && \
     true
