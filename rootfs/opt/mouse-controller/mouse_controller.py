@@ -1,82 +1,79 @@
-# mouse_controller.py
-from flask import Flask, request, jsonify
-import pyautogui
-import time
-import os
+FROM alpine:3.14 AS membarrier
+WORKDIR /tmp
+COPY membarrier_check.c .
+RUN apk --no-cache add build-base linux-headers
+RUN gcc -static -o membarrier_check membarrier_check.c
+RUN strip membarrier_check
 
-app = Flask(__name__)
+FROM jlesage/baseimage-gui:alpine-3.21-v4.7.1
 
-pyautogui.FAILSAFE = False
+ARG DOCKER_IMAGE_VERSION=
+ARG FIREFOX_VERSION=136.0.4-r0 # Or your preferred Firefox version
 
-@app.route('/mouse_action', methods=['GET', 'POST'])
-def mouse_action():
-    try:
-        if request.method == 'POST':
-            data = request.get_json()
-        else: # GET request
-            data = request.args
+WORKDIR /tmp
 
-        x = data.get('x')
-        y = data.get('y')
-        action = data.get('action', 'move_click')
-        button = data.get('button', 'left')
-        duration = float(data.get('duration', 0.2))
-        secret_token = data.get('token')
+RUN \
+     add-pkg firefox=${FIREFOX_VERSION}
 
-        EXPECTED_TOKEN = os.environ.get("MOUSE_API_TOKEN", "your_super_secret_token_123") # Get token from ENV or default
-        if not EXPECTED_TOKEN: # Ensure token is not empty
-             print("Error: MOUSE_API_TOKEN is not set or is empty!")
-             return jsonify({"status": "error", "message": "Server configuration error: API token missing"}), 500
-        if secret_token != EXPECTED_TOKEN:
-            return jsonify({"status": "error", "message": "Unauthorized"}), 401
+RUN \
+    add-pkg \
+        mesa-dri-gallium \
+        libpulse \
+        adwaita-icon-theme \
+        font-dejavu \
+        xdotool \
+        python3 \
+        py3-pip \
+        tcl-dev \
+        tk-dev \
+        python3-dev \
+        scrot \
+        build-base \
+        && \
+    python3 -m pip install --upgrade pip --break-system-packages && \
+    pip3 install --no-cache-dir --break-system-packages Flask pyautogui && \
+    find /usr/share/icons/Adwaita -type d -mindepth 1 -maxdepth 1 -not -name 16x16 -not -name scalable -exec rm -rf {} ';' && \
+    true
 
-        if x is None or y is None:
-            return jsonify({"status": "error", "message": "Missing 'x' or 'y' coordinates"}), 400
+RUN \
+    APP_ICON_URL=https://github.com/jlesage/docker-templates/raw/master/jlesage/images/firefox-icon.png && \
+    install_app_icon.sh "$APP_ICON_URL"
 
-        x = int(x)
-        y = int(y)
+COPY rootfs/ /
+COPY --from=membarrier /tmp/membarrier_check /usr/bin/
 
-        screenWidth, screenHeight = pyautogui.size()
-        if not (0 <= x < screenWidth and 0 <= y < screenHeight):
-            return jsonify({
-                "status": "error",
-                "message": f"Coordinates ({x},{y}) are out of screen bounds ({screenWidth}x{screenHeight})"
-            }), 400
+EXPOSE 5001
 
-        print(f"Mouse API: Received action: {action} at ({x},{y}), button: {button}, duration: {duration}")
+# s6-overlay service definition for the mouse controller API
+RUN \
+    mkdir -p /etc/s6-overlay/s6-rc.d/mouse-controller && \
+    echo '#!/usr/bin/with-contenv bash' > /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'source /etc/s6/services/init/load-env.sh' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'echo "Mouse Controller Service: Attempting to start Mouse Controller API..."' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'ls -la /opt/mouse-controller/' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'python3 --version' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'pip3 --version' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'echo "Mouse Controller Service: Executing python script..."' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo 'exec s6-setuidgid "${USER_ID}:${GROUP_ID}" python3 /opt/mouse-controller/mouse_controller.py' >> /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    chmod +x /etc/s6-overlay/s6-rc.d/mouse-controller/run && \
+    echo "longrun" > /etc/s6-overlay/s6-rc.d/mouse-controller/type && \
+    mkdir -p /etc/s6-overlay/s6-rc.d/mouse-controller/dependencies.d
 
-        if action == 'move':
-            pyautogui.moveTo(x, y, duration=duration)
-            message = f"Mouse moved to ({x},{y})"
-        elif action == 'click':
-            pyautogui.moveTo(x, y, duration=duration)
-            pyautogui.click(button=button)
-            message = f"Mouse clicked {button} button at ({x},{y})"
-        elif action == 'move_click':
-            pyautogui.moveTo(x, y, duration=duration)
-            time.sleep(0.1)
-            pyautogui.click(button=button)
-            message = f"Mouse moved to ({x},{y}) and clicked {button} button"
-        elif action == 'double_click':
-            pyautogui.moveTo(x, y, duration=duration)
-            time.sleep(0.1)
-            pyautogui.doubleClick(button=button)
-            message = f"Mouse double-clicked {button} button at ({x},{y})"
-        elif action == 'right_click':
-            pyautogui.moveTo(x, y, duration=duration)
-            time.sleep(0.1)
-            pyautogui.rightClick()
-            message = f"Mouse right-clicked at ({x},{y})"
-        else:
-            return jsonify({"status": "error", "message": "Invalid action specified"}), 400
+RUN \
+    set-cont-env APP_NAME "Firefox" && \
+    set-cont-env APP_VERSION "$FIREFOX_VERSION" && \
+    set-cont-env DOCKER_IMAGE_VERSION "$DOCKER_IMAGE_VERSION" && \
+    set-cont-env MOUSE_API_PORT "5001" && \
+    true
 
-        return jsonify({"status": "success", "message": message})
+ENV \
+    FF_OPEN_URL= \
+    FF_KIOSK=0 \
+    FF_CUSTOM_ARGS=
 
-    except Exception as e:
-        print(f"Mouse API Error: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-if __name__ == '__main__':
-    api_port = int(os.environ.get("MOUSE_API_PORT", 5001))
-    print(f"Mouse Controller API starting on host 0.0.0.0 port {api_port}")
-    app.run(host='0.0.0.0', port=api_port, debug=False)
+LABEL \
+      org.label-schema.name="firefox-with-mousecontrol" \
+      org.label-schema.description="Docker container for Firefox with integrated mouse control API" \
+      org.label-schema.version="${DOCKER_IMAGE_VERSION:-unknown}" \
+      org.label-schema.vcs-url="https://github.com/bigfather98/docker-firefox" \
+      org.label-schema.schema-version="1.0"
